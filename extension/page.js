@@ -19,7 +19,7 @@ var telegramChatId = '';
 async function SendToTelegram(blob, filename) {
 	if (!telegramBotToken || !telegramChatId) {
 		console.error('Telegram bot token or chat ID not configured');
-		return;
+		return false;
 	}
 
 	const formData = new FormData();
@@ -28,19 +28,30 @@ async function SendToTelegram(blob, filename) {
 	formData.append('caption', filename);
 
 	try {
+		console.log('Sending to Telegram...', {
+			chatId: telegramChatId,
+			filename: filename,
+			blobSize: blob.size
+		});
+
 		const response = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendPhoto`, {
 			method: 'POST',
 			body: formData
 		});
 
 		const result = await response.json();
+		
 		if (result.ok) {
 			console.log('Screenshot sent to Telegram successfully');
+			return true;
 		} else {
 			console.error('Telegram API error:', result.description);
+			console.error('Full response:', result);
+			return false;
 		}
 	} catch (error) {
 		console.error('Error sending to Telegram:', error);
+		return false;
 	}
 }
 
@@ -103,11 +114,29 @@ function CaptureScreenshot(isAuto = false) {
 		await navigator.clipboard.write([clipboardItemInput]);
 	}
 
-	// For auto-screenshots, always send to Telegram
-	if (isAuto && telegramBotToken && telegramChatId) {
-		canvas.toBlob(async function (blob) {
-			await SendToTelegram(blob, title);
-		}, 'image/png');
+	// For auto-screenshots, always send to Telegram (and also save/copy based on settings)
+	if (isAuto) {
+		if (telegramBotToken && telegramChatId) {
+			canvas.toBlob(async function (blob) {
+				await SendToTelegram(blob, title);
+				console.log('Auto-screenshot sent to Telegram:', title);
+			}, 'image/png');
+		} else {
+			console.error('Telegram not configured. Please set bot token and chat ID in extension options.');
+		}
+		
+		// Also save/copy to clipboard if functionality is set for that
+		if (screenshotFunctionality == 1 || screenshotFunctionality == 2) {
+			canvas.toBlob(async function (blob) {
+				await ClipboardBlob(blob);
+			}, 'image/png');
+		}
+		
+		if (screenshotFunctionality == 0 || (screenshotFunctionality == 2 && screenshotFormat !== 'png')) {
+			canvas.toBlob(async function (blob) {
+				DownloadBlob(blob);
+			}, 'image/' + screenshotFormat);
+		}
 		return;
 	}
 
@@ -164,10 +193,18 @@ function ToggleAutoScreenshot() {
 	
 	if (autoScreenshotEnabled) {
 		StartAutoScreenshot();
+		autoScreenshotButton.innerHTML = "Auto ON";
+		autoScreenshotButton.style.color = "#0f0";
+		autoScreenshotButton.style.fontWeight = "bold";
 		autoScreenshotButton.classList.add('SYTactive');
+		autoScreenshotButton.title = `Auto-screenshot ACTIVE (every ${autoScreenshotInterval} min) - Click to stop`;
 	} else {
 		StopAutoScreenshot();
+		autoScreenshotButton.innerHTML = "Auto OFF";
+		autoScreenshotButton.style.color = "#aaa";
+		autoScreenshotButton.style.fontWeight = "normal";
 		autoScreenshotButton.classList.remove('SYTactive');
+		autoScreenshotButton.title = "Auto-screenshot INACTIVE - Click to start";
 	}
 }
 
@@ -223,9 +260,10 @@ screenshotButton.onclick = () => CaptureScreenshot(false);
 var autoScreenshotButton = document.createElement("button");
 autoScreenshotButton.className = "ytp-button SYText";
 autoScreenshotButton.style.width = "auto";
-autoScreenshotButton.innerHTML = "Auto";
+autoScreenshotButton.innerHTML = "Auto OFF";
 autoScreenshotButton.title = "Toggle auto-screenshot to Telegram";
 autoScreenshotButton.style.cssFloat = "left";
+autoScreenshotButton.style.color = "#aaa";
 autoScreenshotButton.onclick = ToggleAutoScreenshot;
 
 var speed1xButton = document.createElement("button");
@@ -321,7 +359,11 @@ chrome.storage.sync.get([
 	if (autoScreenshotEnabled && telegramBotToken && telegramChatId) {
 		StartAutoScreenshot();
 		if (autoScreenshotButton) {
+			autoScreenshotButton.innerHTML = "Auto ON";
+			autoScreenshotButton.style.color = "#0f0";
+			autoScreenshotButton.style.fontWeight = "bold";
 			autoScreenshotButton.classList.add('SYTactive');
+			autoScreenshotButton.title = `Auto-screenshot ACTIVE (every ${autoScreenshotInterval} min) - Click to stop`;
 		}
 	}
 });
