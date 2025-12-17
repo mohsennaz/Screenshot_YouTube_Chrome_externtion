@@ -8,12 +8,45 @@ var screenshotFormat = "png";
 var extension = 'png';
 var isAppended = false;
 
-function CaptureScreenshot() {
+// Auto-screenshot variables
+var autoScreenshotEnabled = false;
+var autoScreenshotInterval = 5; // minutes
+var autoScreenshotTimer = null;
+var telegramBotToken = '';
+var telegramChatId = '';
 
+// Function to send screenshot to Telegram
+async function SendToTelegram(blob, filename) {
+	if (!telegramBotToken || !telegramChatId) {
+		console.error('Telegram bot token or chat ID not configured');
+		return;
+	}
+
+	const formData = new FormData();
+	formData.append('chat_id', telegramChatId);
+	formData.append('photo', blob, filename);
+	formData.append('caption', filename);
+
+	try {
+		const response = await fetch(`https://api.telegram.org/bot${telegramBotToken}/sendPhoto`, {
+			method: 'POST',
+			body: formData
+		});
+
+		const result = await response.json();
+		if (result.ok) {
+			console.log('Screenshot sent to Telegram successfully');
+		} else {
+			console.error('Telegram API error:', result.description);
+		}
+	} catch (error) {
+		console.error('Error sending to Telegram:', error);
+	}
+}
+
+function CaptureScreenshot(isAuto = false) {
 	var appendixTitle = "screenshot." + extension;
-
 	var title;
-
 	var headerEls = document.querySelectorAll("h1.title.ytd-video-primary-info-renderer");
 
 	function SetTitle() {
@@ -27,29 +60,29 @@ function CaptureScreenshot() {
 	
 	if (SetTitle() == false) {
 		headerEls = document.querySelectorAll("h1.watch-title-container");
-
 		if (SetTitle() == false)
 			title = '';
 	}
 
 	var player = document.getElementsByClassName("video-stream")[0];
+	if (!player) {
+		console.error('Video player not found');
+		return;
+	}
 
 	var time = player.currentTime;
-
 	title += " ";
 
-	let minutes = Math.floor(time / 60)
-
+	let minutes = Math.floor(time / 60);
 	time = Math.floor(time - (minutes * 60));
 
 	if (minutes > 60) {
-		let hours = Math.floor(minutes / 60)
+		let hours = Math.floor(minutes / 60);
 		minutes -= hours * 60;
 		title += hours + "-";
 	}
 
 	title += minutes + "-" + time;
-
 	title += " " + appendixTitle;
 
 	var canvas = document.createElement("canvas");
@@ -70,22 +103,71 @@ function CaptureScreenshot() {
 		await navigator.clipboard.write([clipboardItemInput]);
 	}
 
-	// If clipboard copy is needed generate png (clipboard only supports png)
+	// For auto-screenshots, always send to Telegram
+	if (isAuto && telegramBotToken && telegramChatId) {
+		canvas.toBlob(async function (blob) {
+			await SendToTelegram(blob, title);
+		}, 'image/png');
+		return;
+	}
+
+	// Original functionality for manual screenshots
 	if (screenshotFunctionality == 1 || screenshotFunctionality == 2) {
 		canvas.toBlob(async function (blob) {
 			await ClipboardBlob(blob);
-			// Also download it if it's needed and it's in the correct format
 			if (screenshotFunctionality == 2 && screenshotFormat === 'png') {
 				DownloadBlob(blob);
 			}
 		}, 'image/png');
 	}
 
-	// Create and download image in the selected format if needed
 	if (screenshotFunctionality == 0 || (screenshotFunctionality == 2 && screenshotFormat !== 'png')) {
 		canvas.toBlob(async function (blob) {
 			DownloadBlob(blob);
 		}, 'image/' + screenshotFormat);
+	}
+}
+
+// Start auto-screenshot timer
+function StartAutoScreenshot() {
+	if (autoScreenshotTimer) {
+		clearInterval(autoScreenshotTimer);
+	}
+
+	if (autoScreenshotEnabled) {
+		// Take first screenshot immediately
+		CaptureScreenshot(true);
+		
+		// Then set up interval
+		const intervalMs = autoScreenshotInterval * 60 * 1000;
+		autoScreenshotTimer = setInterval(() => {
+			CaptureScreenshot(true);
+		}, intervalMs);
+		
+		console.log(`Auto-screenshot started: every ${autoScreenshotInterval} minutes`);
+	}
+}
+
+// Stop auto-screenshot timer
+function StopAutoScreenshot() {
+	if (autoScreenshotTimer) {
+		clearInterval(autoScreenshotTimer);
+		autoScreenshotTimer = null;
+		console.log('Auto-screenshot stopped');
+	}
+}
+
+// Toggle auto-screenshot
+function ToggleAutoScreenshot() {
+	autoScreenshotEnabled = !autoScreenshotEnabled;
+	chrome.storage.sync.set({'autoScreenshotEnabled': autoScreenshotEnabled});
+	
+	if (autoScreenshotEnabled) {
+		StartAutoScreenshot();
+		autoScreenshotButton.classList.add('SYTactive');
+	} else {
+		StopAutoScreenshot();
+		autoScreenshotButton.classList.remove('SYTactive');
 	}
 }
 
@@ -97,6 +179,7 @@ function AddScreenshotButton() {
 	}
 
 	ytpRightControls.prepend(screenshotButton);
+	ytpRightControls.prepend(autoScreenshotButton);
 	isAppended = true;
 
 	chrome.storage.sync.get('playbackSpeedButtons', function(result) {
@@ -135,7 +218,15 @@ screenshotButton.className = "screenshotButton ytp-button";
 screenshotButton.style.width = "auto";
 screenshotButton.innerHTML = "Screenshot";
 screenshotButton.style.cssFloat = "left";
-screenshotButton.onclick = CaptureScreenshot;
+screenshotButton.onclick = () => CaptureScreenshot(false);
+
+var autoScreenshotButton = document.createElement("button");
+autoScreenshotButton.className = "ytp-button SYText";
+autoScreenshotButton.style.width = "auto";
+autoScreenshotButton.innerHTML = "Auto";
+autoScreenshotButton.title = "Toggle auto-screenshot to Telegram";
+autoScreenshotButton.style.cssFloat = "left";
+autoScreenshotButton.onclick = ToggleAutoScreenshot;
 
 var speed1xButton = document.createElement("button");
 speed1xButton.className = "ytp-button SYText";
@@ -189,13 +280,23 @@ speed3xButton.onclick = function() {
 
 activePBRButton = speed1xButton;
 
-chrome.storage.sync.get(['screenshotKey', 'playbackSpeedButtons', 'screenshotFunctionality', 'screenshotFileFormat'], function(result) {
+chrome.storage.sync.get([
+	'screenshotKey', 
+	'playbackSpeedButtons', 
+	'screenshotFunctionality', 
+	'screenshotFileFormat',
+	'autoScreenshotEnabled',
+	'autoScreenshotInterval',
+	'telegramBotToken',
+	'telegramChatId'
+], function(result) {
 	screenshotKey = result.screenshotKey;
 	playbackSpeedButtons = result.playbackSpeedButtons;
+	
 	if (result.screenshotFileFormat === undefined) {
-		screenshotFormat = 'png'
+		screenshotFormat = 'png';
 	} else {
-		screenshotFormat = result.screenshotFileFormat
+		screenshotFormat = result.screenshotFileFormat;
 	}
 
 	if (result.screenshotFunctionality === undefined) {
@@ -209,10 +310,27 @@ chrome.storage.sync.get(['screenshotKey', 'playbackSpeedButtons', 'screenshotFun
 	} else {
 		extension = screenshotFormat;
 	}
+
+	// Load auto-screenshot settings
+	autoScreenshotEnabled = result.autoScreenshotEnabled || false;
+	autoScreenshotInterval = result.autoScreenshotInterval || 5;
+	telegramBotToken = result.telegramBotToken || '';
+	telegramChatId = result.telegramChatId || '';
+
+	// Start auto-screenshot if enabled
+	if (autoScreenshotEnabled && telegramBotToken && telegramChatId) {
+		StartAutoScreenshot();
+		if (autoScreenshotButton) {
+			autoScreenshotButton.classList.add('SYTactive');
+		}
+	}
 });
 
 document.addEventListener('keydown', function(e) {
-	if (document.activeElement.contentEditable === 'true' || document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.contentEditable === 'plaintext')
+	if (document.activeElement.contentEditable === 'true' || 
+		document.activeElement.tagName === 'INPUT' || 
+		document.activeElement.tagName === 'TEXTAREA' || 
+		document.activeElement.contentEditable === 'plaintext')
 		return true;
 
 	if (playbackSpeedButtons) {
@@ -241,7 +359,7 @@ document.addEventListener('keydown', function(e) {
 	}
 
 	if (screenshotKey && e.key === 'p') {
-		CaptureScreenshot();
+		CaptureScreenshot(false);
 		e.preventDefault();
 		return false;
 	}
@@ -270,4 +388,9 @@ const observer = new MutationObserver(onDomChange);
 observer.observe(document.body, {
 	childList: true,
 	subtree: true
+});
+
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+	StopAutoScreenshot();
 });

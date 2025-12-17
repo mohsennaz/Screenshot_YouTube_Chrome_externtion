@@ -9,6 +9,7 @@
 body {
 	margin: 25px;
 	font-size: 14px;
+	font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }
 code {
 	background: #ddd;
@@ -18,6 +19,8 @@ code {
 }
 h2 {
 	margin: 25px 0 10px;
+	border-bottom: 2px solid #e0e0e0;
+	padding-bottom: 5px;
 }
 h3 {
 	margin: 25px 0 5px;
@@ -37,6 +40,54 @@ label:hover {
 	margin: 0 10px 5px 0;
 	min-width: 60px;
 }
+.input-group {
+	margin: 15px 0;
+}
+.input-group label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 5px;
+	padding: 0;
+}
+.input-group input[type="text"],
+.input-group input[type="number"] {
+	width: 100%;
+	max-width: 500px;
+	padding: 8px;
+	border: 1px solid #ccc;
+	border-radius: 4px;
+	font-size: 14px;
+	box-sizing: border-box;
+}
+.input-group small {
+	display: block;
+	color: #666;
+	margin-top: 5px;
+}
+.telegram-section {
+	background: #f9f9f9;
+	padding: 15px;
+	border-radius: 5px;
+	margin: 15px 0;
+}
+.success-message {
+	color: #28a745;
+	padding: 10px;
+	background: #d4edda;
+	border: 1px solid #c3e6cb;
+	border-radius: 4px;
+	margin: 10px 0;
+	display: none;
+}
+.error-message {
+	color: #dc3545;
+	padding: 10px;
+	background: #f8d7da;
+	border: 1px solid #f5c6cb;
+	border-radius: 4px;
+	margin: 10px 0;
+	display: none;
+}
 </style>
 </head>
 <body>
@@ -44,7 +95,7 @@ label:hover {
 <p>by <a href="http://futuremillennium.com" target="_blank">Zdeněk Gromnica a.k.a FutureMillennium</a></p>
 <p>Consider supporting on Patreon: <a href="https://www.patreon.com/FutureMillennium" target="_blank">https://www.patreon.com/FutureMillennium</a></p>
 
-<h2>Options</h2>
+<h2>Basic Options</h2>
 
 <p><label><input type="checkbox" id="ScreenshotKeyCheck" /> <code>P</code> keyboard shortcut to take screenshot</label></p>
 <p><label>Image format to use:
@@ -62,15 +113,50 @@ label:hover {
     <label><input type="radio" name="ScreenshotFunctionalityCheck" value="2" id="SFCBoth"> Both</label>
 </p>
 
+<h2>Auto-Screenshot to Telegram</h2>
+
+<div class="telegram-section">
+	<p><label><input type="checkbox" id="AutoScreenshotCheck" /> Enable automatic screenshots</label></p>
+	
+	<div class="input-group">
+		<label for="AutoScreenshotInterval">Screenshot interval (minutes):</label>
+		<input type="number" id="AutoScreenshotInterval" min="1" max="60" value="5" />
+		<small>How often to take screenshots automatically (1-60 minutes)</small>
+	</div>
+
+	<div class="input-group">
+		<label for="TelegramBotToken">Telegram Bot Token:</label>
+		<input type="text" id="TelegramBotToken" placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz" />
+		<small>Get from <a href="https://t.me/BotFather" target="_blank">@BotFather</a> on Telegram</small>
+	</div>
+
+	<div class="input-group">
+		<label for="TelegramChatId">Telegram Chat ID:</label>
+		<input type="text" id="TelegramChatId" placeholder="-1001234567890 or @yourchannel" />
+		<small>Channel/group ID or username. For channel ID, use <a href="https://t.me/getidsbot" target="_blank">@getidsbot</a></small>
+	</div>
+
+	<div id="successMessage" class="success-message">Settings saved successfully!</div>
+	<div id="errorMessage" class="error-message"></div>
+	
+	<h4>Setup Instructions:</h4>
+	<ol>
+		<li>Create a bot using <a href="https://t.me/BotFather" target="_blank">@BotFather</a> and copy the token</li>
+		<li>Create a Telegram channel or use an existing one</li>
+		<li>Add your bot as an administrator to the channel</li>
+		<li>Get the channel ID using <a href="https://t.me/getidsbot" target="_blank">@getidsbot</a></li>
+		<li>Paste both token and chat ID above</li>
+		<li>Click the "Auto" button on any YouTube video to start</li>
+	</ol>
+</div>
+
 <h2>Extra features</h2>
 <p><label><input type="checkbox" id="PlaybackSpeedButtonsCheck" /> Playback rate buttons</label></p>
 
 <div id="PlaybackSpeedHelp" hidden>
 	<p>Keyboard shortcuts:</p>
 	<p><code>Q</code> 1×</p>
-	<!-- <p><code>A</code> 1.25×</p> -->
 	<p><code>S</code> 1.5×</p>
-	<!-- <p><code>D</code> 1.75×</p> -->
 	<p><code>W</code> 2×</p>
 	<p><code>E</code> 2.5×</p>
 	<p><code>R</code> 3×</p>
