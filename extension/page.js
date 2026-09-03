@@ -14,6 +14,8 @@ var autoScreenshotInterval = 5; // minutes
 var autoScreenshotTimer = null;
 var telegramBotToken = '';
 var telegramChatId = '';
+var sendToLocalAppEnabled = false;
+var localAppUrl = '';
 
 // Function to send screenshot to Telegram
 async function SendToTelegram(blob, filename) {
@@ -51,6 +53,38 @@ async function SendToTelegram(blob, filename) {
 		}
 	} catch (error) {
 		console.error('Error sending to Telegram:', error);
+		return false;
+	}
+}
+
+// Function to send screenshot to a local app (e.g. a Python analysis service)
+async function SendToLocalApp(blob, filename) {
+	if (!sendToLocalAppEnabled || !localAppUrl) {
+		return false;
+	}
+
+	const formData = new FormData();
+	formData.append('frame', blob, filename);
+	formData.append('filename', filename);
+	formData.append('timestamp', Date.now().toString());
+
+	try {
+		const response = await fetch(localAppUrl, {
+			method: 'POST',
+			body: formData
+		});
+
+		if (response.ok) {
+			console.log('Screenshot sent to local app successfully');
+			return true;
+		} else {
+			console.error('Local app returned an error:', response.status, response.statusText);
+			return false;
+		}
+	} catch (error) {
+		// This fires if the local app isn't running, or the URL's host
+		// isn't covered by host_permissions in manifest.json
+		console.error('Error sending to local app:', error);
 		return false;
 	}
 }
@@ -99,6 +133,12 @@ function CaptureScreenshot(isAuto = false) {
 	var canvas = document.createElement("canvas");
 	canvas.width = player.videoWidth;
 	canvas.height = player.videoHeight;
+
+	if (canvas.width === 0 || canvas.height === 0) {
+		console.warn('Video not ready yet (0x0 dimensions), skipping this capture');
+		return;
+	}
+
 	canvas.getContext('2d').drawImage(player, 0, 0, canvas.width, canvas.height);
 
 	var downloadLink = document.createElement("a");
@@ -114,15 +154,24 @@ function CaptureScreenshot(isAuto = false) {
 		await navigator.clipboard.write([clipboardItemInput]);
 	}
 
-	// For auto-screenshots, always send to Telegram (and also save/copy based on settings)
+	// For auto-screenshots, send to Telegram and/or the local app (and also save/copy based on settings)
 	if (isAuto) {
 		if (telegramBotToken && telegramChatId) {
 			canvas.toBlob(async function (blob) {
 				await SendToTelegram(blob, title);
 				console.log('Auto-screenshot sent to Telegram:', title);
 			}, 'image/png');
-		} else {
-			console.error('Telegram not configured. Please set bot token and chat ID in extension options.');
+		}
+
+		if (sendToLocalAppEnabled && localAppUrl) {
+			canvas.toBlob(async function (blob) {
+				await SendToLocalApp(blob, title);
+				console.log('Auto-screenshot sent to local app:', title);
+			}, 'image/png');
+		}
+
+		if (!telegramBotToken && !telegramChatId && !(sendToLocalAppEnabled && localAppUrl)) {
+			console.error('No destination configured. Set Telegram token/chat ID and/or a local app URL in extension options.');
 		}
 		
 		// Also save/copy to clipboard if functionality is set for that
@@ -326,7 +375,9 @@ chrome.storage.sync.get([
 	'autoScreenshotEnabled',
 	'autoScreenshotInterval',
 	'telegramBotToken',
-	'telegramChatId'
+	'telegramChatId',
+	'sendToLocalAppEnabled',
+	'localAppUrl'
 ], function(result) {
 	screenshotKey = result.screenshotKey;
 	playbackSpeedButtons = result.playbackSpeedButtons;
@@ -354,9 +405,13 @@ chrome.storage.sync.get([
 	autoScreenshotInterval = result.autoScreenshotInterval || 5;
 	telegramBotToken = result.telegramBotToken || '';
 	telegramChatId = result.telegramChatId || '';
+	sendToLocalAppEnabled = result.sendToLocalAppEnabled || false;
+	localAppUrl = result.localAppUrl || '';
 
-	// Start auto-screenshot if enabled
-	if (autoScreenshotEnabled && telegramBotToken && telegramChatId) {
+	// Start auto-screenshot if enabled and at least one destination is configured
+	var hasTelegram = telegramBotToken && telegramChatId;
+	var hasLocalApp = sendToLocalAppEnabled && localAppUrl;
+	if (autoScreenshotEnabled && (hasTelegram || hasLocalApp)) {
 		StartAutoScreenshot();
 		if (autoScreenshotButton) {
 			autoScreenshotButton.innerHTML = "Auto ON";

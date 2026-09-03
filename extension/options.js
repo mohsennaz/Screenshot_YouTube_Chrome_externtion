@@ -9,7 +9,9 @@ chrome.storage.sync.get([
 	'autoScreenshotEnabled',
 	'autoScreenshotInterval',
 	'telegramBotToken',
-	'telegramChatId'
+	'telegramChatId',
+	'sendToLocalAppEnabled',
+	'localAppUrl'
 ], function(result) {
 	// Basic settings
 	ScreenshotKeyCheck.checked = result.screenshotKey || false;
@@ -32,6 +34,14 @@ chrome.storage.sync.get([
 	AutoScreenshotInterval.value = result.autoScreenshotInterval || 5;
 	TelegramBotToken.value = result.telegramBotToken || '';
 	TelegramChatId.value = result.telegramChatId || '';
+
+	// Local app settings
+	SendToLocalAppCheck.checked = result.sendToLocalAppEnabled || false;
+	if (result.localAppUrl === undefined) {
+		chrome.storage.sync.set({ localAppUrl: 'http://localhost:5000/frame' });
+		result.localAppUrl = 'http://localhost:5000/frame';
+	}
+	LocalAppUrl.value = result.localAppUrl;
 });
 
 // Basic screenshot settings
@@ -100,6 +110,42 @@ TelegramChatId.oninput = function() {
 	chrome.storage.sync.set({'telegramChatId': value});
 	showSuccessMessage();
 };
+
+// Local app settings
+SendToLocalAppCheck.oninput = function() {
+	chrome.storage.sync.set({'sendToLocalAppEnabled': this.checked});
+	showSuccessMessage();
+};
+
+LocalAppUrl.oninput = function() {
+	const value = this.value.trim();
+	chrome.storage.sync.set({'localAppUrl': value});
+
+	if (value && !validateLocalAppUrl(value)) {
+		return;
+	}
+	showSuccessMessage();
+};
+
+// Validate local app URL - only localhost/127.0.0.1 are covered by the
+// manifest's host_permissions without editing and reloading the extension
+function validateLocalAppUrl(url) {
+	try {
+		const parsed = new URL(url);
+		if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+			showErrorMessage('URL must start with http:// or https://');
+			return false;
+		}
+		if (parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
+			showErrorMessage('Only localhost or 127.0.0.1 are allowed unless you add the host to manifest.json host_permissions and reload the extension');
+			return false;
+		}
+		return true;
+	} catch (e) {
+		showErrorMessage('Invalid URL');
+		return false;
+	}
+}
 
 // Validate Telegram bot token format
 function validateTelegramToken(token) {

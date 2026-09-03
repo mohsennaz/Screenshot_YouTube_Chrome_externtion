@@ -150,6 +150,18 @@ label:hover {
 	</ol>
 </div>
 
+<h2>Auto-Screenshot to Local App</h2>
+
+<div class="telegram-section">
+	<p><label><input type="checkbox" id="SendToLocalAppCheck" /> Also send automatic screenshots to a local app</label></p>
+
+	<div class="input-group">
+		<label for="LocalAppUrl">Local app endpoint URL:</label>
+		<input type="text" id="LocalAppUrl" placeholder="http://localhost:5000/frame" />
+		<small>The screenshot is POSTed as multipart/form-data (field name: <code>frame</code>) to this URL. Only <code>localhost</code>/<code>127.0.0.1</code> (any port) are allowed without editing the extension's manifest.</small>
+	</div>
+</div>
+
 <h2>Extra features</h2>
 <p><label><input type="checkbox" id="PlaybackSpeedButtonsCheck" /> Playback rate buttons</label></p>
 
